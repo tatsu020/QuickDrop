@@ -91,10 +91,11 @@ public static class FilePackaging
         };
     }
 
-    public static async Task<string> ExtractAsync(string archivePath, ProtocolHeader header, CancellationToken cancellationToken)
+    public static async Task<string> ExtractAsync(string archivePath, ProtocolHeader header, AppSettings settings, CancellationToken cancellationToken)
     {
-        QuickDropPaths.EnsureDirectories();
-        var downloads = Path.GetFullPath(QuickDropPaths.DownloadsDirectory);
+        QuickDropPaths.EnsureDirectories(settings);
+        var downloads = Path.GetFullPath(QuickDropPaths.GetDownloadsDirectory(settings));
+        var receivedAt = DateTime.Now;
         using var archive = ZipFile.OpenRead(archivePath);
 
         if (header.ExtractMode == "SingleFile")
@@ -104,7 +105,7 @@ public static class FilePackaging
             var destination = GetAvailableFilePath(Path.Combine(downloads, fileEntry.Name));
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             fileEntry.ExtractToFile(destination);
-            File.SetLastWriteTime(destination, fileEntry.LastWriteTime.LocalDateTime);
+            File.SetLastWriteTime(destination, receivedAt);
             return destination;
         }
 
@@ -147,12 +148,14 @@ public static class FilePackaging
 
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             entry.ExtractToFile(destination, overwrite: false);
-            File.SetLastWriteTime(destination, entry.LastWriteTime.LocalDateTime);
+            File.SetLastWriteTime(destination, receivedAt);
         }
 
-        return header.ExtractMode == "SingleFolder" && renamedSingleFolder is not null
+        var savedPath = header.ExtractMode == "SingleFolder" && renamedSingleFolder is not null
             ? Path.Combine(downloads, renamedSingleFolder)
             : baseDirectory;
+        TouchExtractedDirectories(savedPath, downloads, receivedAt);
+        return savedPath;
     }
 
     private static void AddDirectory(ZipArchive archive, string directoryPath, string topName, CancellationToken cancellationToken)
@@ -316,6 +319,35 @@ public static class FilePackaging
             {
                 return candidate;
             }
+        }
+    }
+
+    private static void TouchExtractedDirectories(string savedPath, string downloads, DateTime timestamp)
+    {
+        if (!Directory.Exists(savedPath) ||
+            string.Equals(Path.GetFullPath(savedPath), Path.GetFullPath(downloads), StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(savedPath, "*", SearchOption.AllDirectories)
+            .OrderByDescending(path => path.Length))
+        {
+            TrySetDirectoryLastWriteTime(directory, timestamp);
+        }
+
+        TrySetDirectoryLastWriteTime(savedPath, timestamp);
+    }
+
+    private static void TrySetDirectoryLastWriteTime(string directory, DateTime timestamp)
+    {
+        try
+        {
+            Directory.SetLastWriteTime(directory, timestamp);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Failed to update received directory timestamp: {directory}", ex);
         }
     }
 

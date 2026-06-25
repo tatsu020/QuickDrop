@@ -153,14 +153,14 @@ public sealed class ReceiverServer : IAsyncDisposable
         });
     }
 
-    private static async Task<string> ReceiveArchiveAsync(Stream stream, ProtocolHeader header, CancellationToken cancellationToken)
+    private async Task<string> ReceiveArchiveAsync(Stream stream, ProtocolHeader header, CancellationToken cancellationToken)
     {
         if (header.ArchiveBytes < 0)
         {
             throw new InvalidDataException("Invalid archive size.");
         }
 
-        QuickDropPaths.EnsureDirectories();
+        QuickDropPaths.EnsureDirectories(_settings);
         var archivePath = Path.Combine(QuickDropPaths.TempDirectory, $"incoming-{Guid.NewGuid():N}.zip");
         try
         {
@@ -190,7 +190,7 @@ public sealed class ReceiverServer : IAsyncDisposable
                 }
             }
 
-            return await FilePackaging.ExtractAsync(archivePath, header, cancellationToken).ConfigureAwait(false);
+            return await FilePackaging.ExtractAsync(archivePath, header, _settings, cancellationToken).ConfigureAwait(false);
         }
         finally
         {

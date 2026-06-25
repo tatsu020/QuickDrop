@@ -1,6 +1,6 @@
 # QuickDrop
 
-QuickDrop is a Windows-to-Windows file sender for Explorer. Keep QuickDrop running on each PC, right-click files or folders, choose `ファイルを送信`, then choose a detected destination. The receiver saves incoming items into that user's Downloads folder.
+QuickDrop is a Windows-to-Windows file sender for Explorer. Keep QuickDrop running on each PC, right-click files or folders, choose `ファイルを送信`, then choose a detected destination. The receiver saves incoming items into that user's actual Windows Downloads folder, or into the custom receive folder selected in QuickDrop settings.
 
 ## Features
 
@@ -13,6 +13,7 @@ QuickDrop is a Windows-to-Windows file sender for Explorer. Keep QuickDrop runni
 - Folder selections are recursively packaged and restored as folders.
 - Single files are saved as files; single folders are saved as folders; multiple selections are saved under `Downloads\QuickDrop-yyyyMMdd-HHmmss`.
 - Filename/folder collisions are resolved with `(2)`, `(3)`, and so on.
+- Received files and folders get the receive-time modified timestamp so new transfers stay visible at the top of Explorer's date-sorted views.
 
 ## Build
 
@@ -54,7 +55,7 @@ If you do not want firewall rules to be added, run `Install-QuickDrop.ps1` direc
 4. Choose `ファイルを送信`.
 5. Choose the destination PC.
 
-The sender starts immediately after you choose the destination. The receiver writes the result to Downloads.
+The sender starts immediately after you choose the destination. The receiver writes the result to the detected or configured receive folder.
 
 The `ファイルを送信` submenu shows only PCs whose QuickDrop receiver has been detected as running. If no LAN, Tailscale, or manually added IP has responded yet, QuickDrop opens the app instead so you can check discovery and settings.
 
@@ -63,6 +64,7 @@ The `ファイルを送信` submenu shows only PCs whose QuickDrop receiver has 
 Right-click the QuickDrop tray icon to change common settings:
 
 - `PC起動時に自動実行`: toggle the current user's Windows startup entry.
+- `保存先フォルダー設定`: view the current receive folder, choose a custom receive folder, or return to automatic Windows Downloads detection.
 - `送信先IPを追加...`: add a fixed IP address or host name to probe directly.
 - `登録済み送信先IP`: enable, disable, or remove manually added destinations.
 

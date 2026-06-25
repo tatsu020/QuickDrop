@@ -5,7 +5,8 @@ namespace QuickDrop.App;
 
 public static class ExplorerActions
 {
-    public static void OpenDownloads() => OpenPath(QuickDropPaths.DownloadsDirectory);
+    public static void OpenDownloads(AppSettings? settings = null) =>
+        OpenPath(QuickDropPaths.GetDownloadsDirectory(settings));
 
     public static void OpenLog()
     {

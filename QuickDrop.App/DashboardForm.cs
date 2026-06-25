@@ -8,6 +8,7 @@ public sealed class DashboardForm : Form
     private readonly PeerDiscoveryService _discovery;
     private readonly DataGridView _peersGrid = new();
     private readonly TextBox _displayNameText = new();
+    private readonly Label _downloadFolderLabel = new();
     private readonly CheckBox _acceptTransfersCheck = new();
     private readonly CheckBox _notificationsCheck = new();
     private readonly System.Windows.Forms.Timer _timer = new();
@@ -48,6 +49,17 @@ public sealed class DashboardForm : Form
         _peersGrid.DataSource = rows;
     }
 
+    public void RefreshDownloadFolder()
+    {
+        if (InvokeRequired)
+        {
+            BeginInvoke(RefreshDownloadFolder);
+            return;
+        }
+
+        _downloadFolderLabel.Text = QuickDropPaths.GetDownloadsDirectory(_settings);
+    }
+
     private void BuildLayout()
     {
         var root = new TableLayoutPanel
@@ -73,14 +85,15 @@ public sealed class DashboardForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 4,
-            RowCount = 2
+            RowCount = 3
         };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
 
         panel.Controls.Add(new Label { Text = "表示名", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 0, 0);
         _displayNameText.Text = _settings.DisplayName;
@@ -97,6 +110,15 @@ public sealed class DashboardForm : Form
         _notificationsCheck.Dock = DockStyle.Fill;
         panel.Controls.Add(_notificationsCheck, 3, 0);
 
+        panel.Controls.Add(new Label { Text = "保存先", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 0, 1);
+        _downloadFolderLabel.Dock = DockStyle.Fill;
+        _downloadFolderLabel.TextAlign = ContentAlignment.MiddleLeft;
+        _downloadFolderLabel.AutoEllipsis = true;
+        RefreshDownloadFolder();
+        panel.Controls.Add(_downloadFolderLabel, 1, 1);
+        panel.Controls.Add(CreateButton("保存先を変更", (_, _) => ChangeDownloadFolder()), 2, 1);
+        panel.Controls.Add(CreateButton("自動検出に戻す", (_, _) => ResetDownloadFolder()), 3, 1);
+
         var deviceLabel = new Label
         {
             Text = $"このPC: {Environment.MachineName} / TCP {_settings.ReceiverPort} / UDP {QuickDropConstants.DiscoveryPort}",
@@ -104,7 +126,7 @@ public sealed class DashboardForm : Form
             TextAlign = ContentAlignment.MiddleLeft
         };
         panel.SetColumnSpan(deviceLabel, 4);
-        panel.Controls.Add(deviceLabel, 0, 1);
+        panel.Controls.Add(deviceLabel, 0, 2);
         return panel;
     }
 
@@ -133,7 +155,7 @@ public sealed class DashboardForm : Form
         panel.Controls.Add(CreateButton("閉じる", (_, _) => Hide()));
         panel.Controls.Add(CreateButton("設定を保存", (_, _) => SaveSettings()));
         panel.Controls.Add(CreateButton("右クリックメニューを登録", (_, _) => InstallExplorerMenu()));
-        panel.Controls.Add(CreateButton("Downloads を開く", (_, _) => ExplorerActions.OpenDownloads()));
+        panel.Controls.Add(CreateButton("保存先を開く", (_, _) => ExplorerActions.OpenDownloads(_settings)));
         panel.Controls.Add(CreateButton("更新", (_, _) => RefreshPeers()));
         return panel;
     }
@@ -160,6 +182,38 @@ public sealed class DashboardForm : Form
         _settings.ShowNotifications = _notificationsCheck.Checked;
         _settings.Save();
         MessageBox.Show("設定を保存しました。", "QuickDrop", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private void ChangeDownloadFolder()
+    {
+        var currentPath = QuickDropPaths.GetDownloadsDirectory(_settings);
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "QuickDrop で受信したファイルの保存先フォルダーを選択してください。",
+            SelectedPath = Directory.Exists(currentPath) ? currentPath : QuickDropPaths.AutomaticDownloadsDirectory,
+            ShowNewFolderButton = true,
+            UseDescriptionForTitle = true
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(dialog.SelectedPath))
+        {
+            return;
+        }
+
+        _settings.DownloadDirectoryOverride = dialog.SelectedPath;
+        _settings.Save();
+        QuickDropPaths.EnsureDirectories(_settings);
+        RefreshDownloadFolder();
+        MessageBox.Show("保存先フォルダーを変更しました。", "QuickDrop", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private void ResetDownloadFolder()
+    {
+        _settings.DownloadDirectoryOverride = "";
+        _settings.Save();
+        QuickDropPaths.EnsureDirectories(_settings);
+        RefreshDownloadFolder();
+        MessageBox.Show("保存先フォルダーを自動検出に戻しました。", "QuickDrop", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void InstallExplorerMenu()

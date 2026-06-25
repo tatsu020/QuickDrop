@@ -16,6 +16,8 @@ public sealed class AppSettings
 
     public bool AcceptIncomingTransfers { get; set; } = true;
 
+    public string DownloadDirectoryOverride { get; set; } = "";
+
     public List<ManualPeerEndpoint> ManualPeers { get; set; } = [];
 
     public static AppSettings Load()
@@ -52,6 +54,7 @@ public sealed class AppSettings
                 settings.ReceiverPort = QuickDropConstants.DefaultReceiverPort;
             }
 
+            settings.DownloadDirectoryOverride ??= "";
             settings.ManualPeers ??= [];
             foreach (var peer in settings.ManualPeers)
             {
@@ -74,7 +77,7 @@ public sealed class AppSettings
 
     public void Save()
     {
-        QuickDropPaths.EnsureDirectories();
+        QuickDropPaths.EnsureDirectories(this);
         var json = JsonSerializer.Serialize(this, JsonOptions.Indented);
         File.WriteAllText(QuickDropPaths.SettingsPath, json);
     }
