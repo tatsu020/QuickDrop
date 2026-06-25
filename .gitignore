@@ -1,0 +1,14 @@
+bin/
+obj/
+dist/
+*.user
+*.suo
+*.pdb
+*.ipch
+*.iobj
+*.ipdb
+*.tlog/
+.vs/
+.tmp/
+x64/
+QuickDro.*/
