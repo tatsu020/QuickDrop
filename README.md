@@ -40,6 +40,8 @@ Install-QuickDrop.cmd
 
 The installer registers the Explorer menu, adds the startup entry, starts QuickDrop, and restarts Explorer so the menu appears. It also asks Windows for elevation through UAC when firewall rules are needed. You do not need to open an administrator PowerShell window manually.
 
+The installer window now stays open until you press a key, shows each step, and displays a completion or error dialog. A detailed log is written to `QuickDrop.install.log` in the install folder.
+
 If you do not want firewall rules to be added, run `Install-QuickDrop.ps1` directly without `-AddFirewallRules`.
 
 ## Use
@@ -76,6 +78,8 @@ Uninstall-QuickDrop.cmd
 ```
 
 The uninstaller also self-elevates through UAC when firewall rule removal is needed.
+
+The uninstaller writes `QuickDrop.uninstall.log` in the install folder and keeps its window open until you press a key.
 
 ## Notes
 
