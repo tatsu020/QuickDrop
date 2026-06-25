@@ -57,6 +57,9 @@
       <ModuleDefinitionFile>QuickDrop.ShellExtension.def</ModuleDefinitionFile>
       <AdditionalDependencies>shlwapi.lib;ole32.lib;shell32.lib;advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>QuickDrop.ShellExtension.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
     <ClCompile>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
@@ -78,6 +81,9 @@
       <ModuleDefinitionFile>QuickDrop.ShellExtension.def</ModuleDefinitionFile>
       <AdditionalDependencies>shlwapi.lib;ole32.lib;shell32.lib;advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>QuickDrop.ShellExtension.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
     <ClCompile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
@@ -87,6 +93,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="QuickDrop.ShellExtension.def" />
+    <None Include="QuickDrop.ShellExtension.manifest" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

@@ -8,6 +8,9 @@ param(
 $ErrorActionPreference = "Stop"
 $installDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $shellPath = Join-Path $installDir "QuickDrop.ShellExtension.dll"
+$packageName = "Tatsu020.QuickDrop"
+$packageCertPath = Join-Path $installDir "QuickDrop.Sparse.cer"
+$shellExtensionClsid = "{9B75B6F7-8C63-4B52-A9E4-2CF777E83456}"
 $logPath = Join-Path $installDir "QuickDrop.uninstall.log"
 
 function Test-IsAdmin {
@@ -71,6 +74,54 @@ function Show-QuickDropMessage {
     }
 }
 
+function Remove-ClassicExplorerRegistration {
+    Write-Step "Removing old classic Explorer context menu registration."
+    $paths = @(
+        "Registry::HKEY_CURRENT_USER\Software\Classes\CLSID\$shellExtensionClsid",
+        "Registry::HKEY_CURRENT_USER\Software\Classes\*\shell\QuickDrop.Send",
+        "Registry::HKEY_CURRENT_USER\Software\Classes\Directory\shell\QuickDrop.Send"
+    )
+
+    foreach ($path in $paths) {
+        Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Remove-QuickDropIdentityPackage {
+    $packages = Get-AppxPackage -Name $packageName -ErrorAction SilentlyContinue
+    foreach ($package in $packages) {
+        Write-Step "Removing QuickDrop identity package: $($package.PackageFullName)"
+        Remove-AppxPackage -Package $package.PackageFullName -ErrorAction Stop
+    }
+}
+
+function Remove-QuickDropPackageCertificate {
+    if (-not (Test-Path -LiteralPath $packageCertPath)) {
+        return
+    }
+
+    try {
+        $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($packageCertPath)
+        $scopes = @("CurrentUser")
+        if (Test-IsAdmin) {
+            $scopes += "LocalMachine"
+        }
+
+        foreach ($scope in $scopes) {
+            foreach ($store in @("TrustedPeople", "Root")) {
+                $certStorePath = "Cert:\$scope\$store\$($certificate.Thumbprint)"
+                if (Test-Path -LiteralPath $certStorePath) {
+                    Write-Step "Removing QuickDrop sparse package certificate from $scope $store."
+                    Remove-Item -LiteralPath $certStorePath -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+    }
+    catch {
+        Write-Step "Could not inspect sparse package certificate: $($_.Exception.Message)"
+    }
+}
+
 trap {
     $message = $_.Exception.Message
     Write-Step "ERROR: $message"
@@ -103,15 +154,9 @@ if ($RemoveFirewallRules -and -not (Test-IsAdmin) -and -not $NoElevate) {
 Write-Step "Stopping QuickDrop tray app if it is running."
 Get-Process -Name "QuickDrop.App" -ErrorAction SilentlyContinue | Stop-Process -Force
 
-if (Test-Path -LiteralPath $shellPath) {
-    Write-Step "Unregistering Explorer context menu extension."
-    $reg = Start-Process -FilePath "$env:SystemRoot\System32\regsvr32.exe" -ArgumentList @("/u", "/s", $shellPath) -Wait -PassThru
-    if ($reg.ExitCode -ne 0) {
-        throw "regsvr32 uninstall failed with exit code $($reg.ExitCode)"
-    }
-} else {
-    Write-Step "Shell extension was not found; skipping unregister."
-}
+Remove-QuickDropIdentityPackage
+Remove-ClassicExplorerRegistration
+Remove-QuickDropPackageCertificate
 
 Write-Step "Removing QuickDrop registry settings."
 Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "QuickDrop" -ErrorAction SilentlyContinue

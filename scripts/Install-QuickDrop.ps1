@@ -3,7 +3,8 @@ param(
     [switch]$RestartExplorer,
     [switch]$AddFirewallRules,
     [switch]$NoElevate,
-    [switch]$NoDialog
+    [switch]$NoDialog,
+    [switch]$TrustPackageCertificateOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,6 +12,10 @@ $installDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $appPath = Join-Path $installDir "QuickDrop.App.exe"
 $cliPath = Join-Path $installDir "QuickDrop.Cli.exe"
 $shellPath = Join-Path $installDir "QuickDrop.ShellExtension.dll"
+$packageName = "Tatsu020.QuickDrop"
+$packagePath = Join-Path $installDir "QuickDrop.Sparse.msix"
+$packageCertPath = Join-Path $installDir "QuickDrop.Sparse.cer"
+$shellExtensionClsid = "{9B75B6F7-8C63-4B52-A9E4-2CF777E83456}"
 $logPath = Join-Path $installDir "QuickDrop.install.log"
 
 function Test-IsAdmin {
@@ -74,6 +79,95 @@ function Show-QuickDropMessage {
     }
 }
 
+function Remove-ClassicExplorerRegistration {
+    Write-Step "Removing old classic Explorer context menu registration."
+    $paths = @(
+        "Registry::HKEY_CURRENT_USER\Software\Classes\CLSID\$shellExtensionClsid",
+        "Registry::HKEY_CURRENT_USER\Software\Classes\*\shell\QuickDrop.Send",
+        "Registry::HKEY_CURRENT_USER\Software\Classes\Directory\shell\QuickDrop.Send"
+    )
+
+    foreach ($path in $paths) {
+        Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Import-QuickDropPackageCertificate {
+    param([switch]$Machine)
+
+    if (-not (Test-Path -LiteralPath $packageCertPath)) {
+        Write-Step "Sparse package certificate file was not found. Continuing with existing certificate trust."
+        return
+    }
+
+    $scope = if ($Machine) { "LocalMachine" } else { "CurrentUser" }
+    if (Test-Path -LiteralPath $packageCertPath) {
+        Write-Step "Trusting QuickDrop sparse package certificate in $scope certificate stores."
+        Import-Certificate -FilePath $packageCertPath -CertStoreLocation "Cert:\$scope\TrustedPeople" | Out-Null
+        Import-Certificate -FilePath $packageCertPath -CertStoreLocation "Cert:\$scope\Root" | Out-Null
+    }
+}
+
+function Add-QuickDropIdentityPackage {
+    $existingPackages = Get-AppxPackage -Name $packageName -ErrorAction SilentlyContinue
+    foreach ($package in $existingPackages) {
+        Write-Step "Removing existing QuickDrop identity package: $($package.PackageFullName)"
+        Remove-AppxPackage -Package $package.PackageFullName -ErrorAction Stop
+    }
+
+    Write-Step "Registering Windows 11 File Explorer context menu package."
+    Add-AppxPackage -Path $packagePath -ExternalLocation $installDir -ErrorAction Stop
+}
+
+function Trust-PackageCertificateWithElevation {
+    if ($NoElevate) {
+        return $false
+    }
+
+    if (Test-IsAdmin) {
+        Import-QuickDropPackageCertificate -Machine
+        return $true
+    }
+
+    Write-Step "Package registration needs machine-level certificate trust."
+    Write-Step "Showing Windows UAC prompt for certificate trust only. Please approve it to continue."
+    $arguments = [System.Collections.Generic.List[string]]::new()
+    $arguments.Add("-NoProfile")
+    $arguments.Add("-ExecutionPolicy")
+    $arguments.Add("Bypass")
+    $arguments.Add("-File")
+    $arguments.Add("`"$PSCommandPath`"")
+    $arguments.Add("-TrustPackageCertificateOnly")
+    Add-SwitchArgument -List $arguments -Name "-NoDialog" -Enabled:$NoDialog
+
+    $elevated = Start-Process -FilePath "powershell.exe" -ArgumentList $arguments.ToArray() -Verb RunAs -Wait -PassThru
+    Write-Step "Elevated certificate trust helper exited with code $($elevated.ExitCode)."
+    return $elevated.ExitCode -eq 0
+}
+
+function Register-QuickDropIdentityPackage {
+    if (-not (Test-Path -LiteralPath $packagePath)) {
+        throw "QuickDrop sparse package was not found: $packagePath"
+    }
+
+    Import-QuickDropPackageCertificate
+    try {
+        Add-QuickDropIdentityPackage
+    }
+    catch {
+        $message = $_.Exception.Message
+        if ($message -match "0x800B0109" -or $message -match "CERT_E_UNTRUSTEDROOT") {
+            if (Trust-PackageCertificateWithElevation) {
+                Write-Step "Retrying Windows 11 File Explorer context menu package registration."
+                Add-QuickDropIdentityPackage
+                return
+            }
+        }
+
+        throw
+    }
+}
+
 trap {
     $message = $_.Exception.Message
     Write-Step "ERROR: $message"
@@ -84,11 +178,26 @@ trap {
 Write-Step "Starting QuickDrop install."
 Write-Step "Install directory: $installDir"
 
+if ($TrustPackageCertificateOnly) {
+    if (-not (Test-IsAdmin)) {
+        throw "Certificate trust helper must be run elevated."
+    }
+
+    Import-QuickDropPackageCertificate -Machine
+    Write-Step "QuickDrop sparse package certificate trust completed."
+    exit 0
+}
+
 foreach ($path in @($appPath, $cliPath, $shellPath)) {
     Write-Step "Checking required file: $path"
     if (-not (Test-Path -LiteralPath $path)) {
         throw "Required file was not found: $path"
     }
+}
+
+Write-Step "Checking required file: $packagePath"
+if (-not (Test-Path -LiteralPath $packagePath)) {
+    throw "Required file was not found: $packagePath"
 }
 
 if ($AddFirewallRules -and -not (Test-IsAdmin) -and -not $NoElevate) {
@@ -111,17 +220,17 @@ if ($AddFirewallRules -and -not (Test-IsAdmin) -and -not $NoElevate) {
     exit $elevated.ExitCode
 }
 
+Write-Step "Stopping QuickDrop tray app if it is running."
+Get-Process -Name "QuickDrop.App" -ErrorAction SilentlyContinue | Stop-Process -Force
+
 Write-Step "Writing QuickDrop registry settings."
 New-Item -Path "HKCU:\Software\QuickDrop" -Force | Out-Null
 Set-ItemProperty -Path "HKCU:\Software\QuickDrop" -Name "InstallDirectory" -Value $installDir
 Set-ItemProperty -Path "HKCU:\Software\QuickDrop" -Name "CliPath" -Value $cliPath
 Set-ItemProperty -Path "HKCU:\Software\QuickDrop" -Name "ShellExtensionPath" -Value $shellPath
 
-Write-Step "Registering Explorer context menu extension."
-$reg = Start-Process -FilePath "$env:SystemRoot\System32\regsvr32.exe" -ArgumentList @("/s", $shellPath) -Wait -PassThru
-if ($reg.ExitCode -ne 0) {
-    throw "regsvr32 failed with exit code $($reg.ExitCode)"
-}
+Remove-ClassicExplorerRegistration
+Register-QuickDropIdentityPackage
 
 if (-not $NoStartup) {
     Write-Step "Enabling startup at Windows sign-in."

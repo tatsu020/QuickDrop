@@ -8,7 +8,7 @@ QuickDrop is a Windows-to-Windows file sender for Explorer. Keep QuickDrop runni
 - Automatic peer discovery for PCs where QuickDrop is currently running.
 - LAN discovery by UDP broadcast.
 - Tailscale discovery by probing online Tailscale IPv4 peers from `tailscale status --json`.
-- Windows Explorer context menu entry implemented as a native `IExplorerCommand` shell extension.
+- Windows 11 modern Explorer context menu entry implemented as a native `IExplorerCommand` shell extension registered through a sparse MSIX identity package.
 - Multiple selected files/folders are sent together.
 - Folder selections are recursively packaged and restored as folders.
 - Single files are saved as files; single folders are saved as folders; multiple selections are saved under `Downloads\QuickDrop-yyyyMMdd-HHmmss`.
@@ -38,9 +38,11 @@ Copy the `dist\QuickDrop` folder to each Windows PC, then double-click:
 Install-QuickDrop.cmd
 ```
 
-The installer registers the Explorer menu, adds the startup entry, starts QuickDrop, and restarts Explorer so the menu appears. It also asks Windows for elevation through UAC when firewall rules are needed. You do not need to open an administrator PowerShell window manually.
+The installer registers the Windows 11 Explorer menu, adds the startup entry, starts QuickDrop, and restarts Explorer so the menu appears. It also asks Windows for elevation through UAC when firewall rules are needed. You do not need to open an administrator PowerShell window manually.
 
-The installer window now stays open until you press a key, shows each step, and displays a completion or error dialog. A detailed log is written to `QuickDrop.install.log` in the install folder.
+The installer window stays open until you press a key, shows each step, and displays a completion or error dialog. A detailed log is written to `QuickDrop.install.log` in the install folder.
+
+Windows 11's standard context menu requires package registration. The build creates `QuickDrop.Sparse.msix` and `QuickDrop.Sparse.cer`; the installer imports the public certificate for the current user, registers the sparse package with the install folder as the external location, and removes any old classic-menu registration.
 
 If you do not want firewall rules to be added, run `Install-QuickDrop.ps1` directly without `-AddFirewallRules`.
 
@@ -53,6 +55,8 @@ If you do not want firewall rules to be added, run `Install-QuickDrop.ps1` direc
 5. Choose the destination PC.
 
 The sender starts immediately after you choose the destination. The receiver writes the result to Downloads.
+
+The `ファイルを送信` submenu shows only PCs whose QuickDrop receiver has been detected as running. If no LAN, Tailscale, or manually added IP has responded yet, QuickDrop opens the app instead so you can check discovery and settings.
 
 ## Tray Settings
 
@@ -87,4 +91,4 @@ The uninstaller writes `QuickDrop.uninstall.log` in the install folder and keeps
 - The tray app updates that cache only with peers whose QuickDrop receiver was detected as running.
 - The current default accepts incoming QuickDrop transfers while the app is running. Use the dashboard's `受信を許可` toggle to pause receiving.
 - Tailscale support requires the Tailscale CLI to be installed and logged in.
-- Windows 11's modern context menu is implemented with a native `IExplorerCommand` handler. If Explorer has cached old shell state, restart Explorer after install.
+- Windows 11's modern context menu is implemented with a native `IExplorerCommand` handler registered by `QuickDrop.Sparse.msix`. If Explorer has cached old shell state, restart Explorer after install.

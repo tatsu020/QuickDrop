@@ -9,10 +9,21 @@ public static class ExplorerIntegrationInstaller
     {
         var cliPath = Path.Combine(baseDirectory, "QuickDrop.Cli.exe");
         var shellExtensionPath = Path.Combine(baseDirectory, "QuickDrop.ShellExtension.dll");
+        var installerPath = Path.Combine(baseDirectory, "Install-QuickDrop.ps1");
 
         if (!File.Exists(cliPath))
         {
             throw new FileNotFoundException("QuickDrop.Cli.exe が見つかりません。publish 後のフォルダから実行してください。", cliPath);
+        }
+
+        if (!File.Exists(shellExtensionPath))
+        {
+            throw new FileNotFoundException("QuickDrop.ShellExtension.dll が見つかりません。publish 後のフォルダから実行してください。", shellExtensionPath);
+        }
+
+        if (!File.Exists(installerPath))
+        {
+            throw new FileNotFoundException("Install-QuickDrop.ps1 が見つかりません。install フォルダから実行してください。", installerPath);
         }
 
         using (var key = Registry.CurrentUser.CreateSubKey(@"Software\QuickDrop"))
@@ -22,36 +33,22 @@ public static class ExplorerIntegrationInstaller
             key.SetValue("ShellExtensionPath", shellExtensionPath);
         }
 
-        if (File.Exists(shellExtensionPath))
+        var arguments = string.Join(" ", new[]
         {
-            var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "regsvr32.exe"),
-                Arguments = $"/s \"{shellExtensionPath}\"",
-                UseShellExecute = true,
-                Verb = "open",
-                CreateNoWindow = true
-            });
-            process?.WaitForExit();
-            return "Windows 11 用の右クリックメニューを登録しました。Explorer の再起動後に反映されます。";
-        }
+            "-NoProfile",
+            "-ExecutionPolicy Bypass",
+            $"-File \"{installerPath}\"",
+            "-NoStartup",
+            "-RestartExplorer"
+        });
 
-        RegisterFallbackPicker(cliPath);
-        return "C++ Shell Extension が未配置のため、クラシックメニュー用フォールバックを登録しました。publish 後に再実行すると Windows 11 用メニューを登録できます。";
-    }
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments = arguments,
+            UseShellExecute = true
+        });
 
-    public static void RegisterFallbackPicker(string cliPath)
-    {
-        WriteFallbackKey(@"Software\Classes\*\shell\QuickDrop.Send", cliPath);
-        WriteFallbackKey(@"Software\Classes\Directory\shell\QuickDrop.Send", cliPath);
-    }
-
-    private static void WriteFallbackKey(string keyPath, string cliPath)
-    {
-        using var key = Registry.CurrentUser.CreateSubKey(keyPath);
-        key.SetValue("MUIVerb", "ファイルを送信");
-        key.SetValue("Icon", cliPath);
-        using var command = key.CreateSubKey("command");
-        command.SetValue("", $"\"{cliPath}\" pick-send \"%1\"");
+        return "Windows 11 用の右クリックメニュー登録を開始しました。完了後に QuickDrop と Explorer が再起動します。";
     }
 }
