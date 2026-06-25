@@ -145,12 +145,37 @@ function Trust-PackageCertificateWithElevation {
     return $elevated.ExitCode -eq 0
 }
 
+function Ensure-PackageCertificateTrust {
+    Import-QuickDropPackageCertificate
+
+    if (-not (Test-Path -LiteralPath $packageCertPath)) {
+        return
+    }
+
+    try {
+        $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($packageCertPath)
+        $machineRootPath = "Cert:\LocalMachine\Root\$($certificate.Thumbprint)"
+        $machineTrustedPeoplePath = "Cert:\LocalMachine\TrustedPeople\$($certificate.Thumbprint)"
+        if ((Test-Path -LiteralPath $machineRootPath) -and (Test-Path -LiteralPath $machineTrustedPeoplePath)) {
+            Write-Step "QuickDrop sparse package certificate is already trusted for this machine."
+            return
+        }
+    }
+    catch {
+        Write-Step "Could not inspect machine certificate trust: $($_.Exception.Message)"
+    }
+
+    if (-not (Trust-PackageCertificateWithElevation)) {
+        Write-Step "Machine-level certificate trust was not added. Package registration may fail on this PC."
+    }
+}
+
 function Register-QuickDropIdentityPackage {
     if (-not (Test-Path -LiteralPath $packagePath)) {
         throw "QuickDrop sparse package was not found: $packagePath"
     }
 
-    Import-QuickDropPackageCertificate
+    Ensure-PackageCertificateTrust
     try {
         Add-QuickDropIdentityPackage
     }
