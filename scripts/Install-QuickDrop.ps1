@@ -120,13 +120,13 @@ function Add-QuickDropIdentityPackage {
 }
 
 function Trust-PackageCertificateWithElevation {
-    if ($NoElevate) {
-        return $false
-    }
-
     if (Test-IsAdmin) {
         Import-QuickDropPackageCertificate -Machine
         return $true
+    }
+
+    if ($NoElevate) {
+        return $false
     }
 
     Write-Step "Package registration needs machine-level certificate trust."
