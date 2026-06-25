@@ -1,7 +1,8 @@
 param(
     [switch]$RestartExplorer,
     [switch]$RemoveFirewallRules,
-    [switch]$NoElevate
+    [switch]$NoElevate,
+    [switch]$NoDialog
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,6 +47,11 @@ function Show-QuickDropMessage {
         [string]$Icon = "Information"
     )
 
+    if ($NoDialog) {
+        Write-Host $Message
+        return
+    }
+
     try {
         Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
         $iconValue = [System.Windows.Forms.MessageBoxIcon]::Information
@@ -86,6 +92,7 @@ if ($RemoveFirewallRules -and -not (Test-IsAdmin) -and -not $NoElevate) {
     $arguments.Add("`"$PSCommandPath`"")
     Add-SwitchArgument -List $arguments -Name "-RestartExplorer" -Enabled:$RestartExplorer
     Add-SwitchArgument -List $arguments -Name "-RemoveFirewallRules" -Enabled:$RemoveFirewallRules
+    Add-SwitchArgument -List $arguments -Name "-NoDialog" -Enabled:$NoDialog
     $arguments.Add("-NoElevate")
 
     $elevated = Start-Process -FilePath "powershell.exe" -ArgumentList $arguments.ToArray() -Verb RunAs -Wait -PassThru

@@ -2,7 +2,8 @@ param(
     [switch]$NoStartup,
     [switch]$RestartExplorer,
     [switch]$AddFirewallRules,
-    [switch]$NoElevate
+    [switch]$NoElevate,
+    [switch]$NoDialog
 )
 
 $ErrorActionPreference = "Stop"
@@ -48,6 +49,11 @@ function Show-QuickDropMessage {
         [string]$Title = "QuickDrop Installer",
         [string]$Icon = "Information"
     )
+
+    if ($NoDialog) {
+        Write-Host $Message
+        return
+    }
 
     try {
         Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
@@ -97,6 +103,7 @@ if ($AddFirewallRules -and -not (Test-IsAdmin) -and -not $NoElevate) {
     Add-SwitchArgument -List $arguments -Name "-NoStartup" -Enabled:$NoStartup
     Add-SwitchArgument -List $arguments -Name "-RestartExplorer" -Enabled:$RestartExplorer
     Add-SwitchArgument -List $arguments -Name "-AddFirewallRules" -Enabled:$AddFirewallRules
+    Add-SwitchArgument -List $arguments -Name "-NoDialog" -Enabled:$NoDialog
     $arguments.Add("-NoElevate")
 
     $elevated = Start-Process -FilePath "powershell.exe" -ArgumentList $arguments.ToArray() -Verb RunAs -Wait -PassThru
